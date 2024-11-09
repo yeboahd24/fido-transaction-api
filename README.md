@@ -42,13 +42,7 @@ JWT_ALGORITHM=HS256
 
 Replace `your_encryption_key`, `your_jwt_secret_key`, and `your_jwt_algorithm` with your own values.
 
-4. Create the database and tables:
-
-```bash
-python manage.py create_db
-```
-
-5. Run the application:
+4. Run the application:
 
 ```bash
 uvicorn app.main:app --reload
