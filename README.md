@@ -50,6 +50,8 @@ uvicorn app.main:app --reload
 
 ## Usage
 
+NB: The documentation for this project is also hosted on [Postman](https://documenter.getpostman.com/view/14925315/2sAY52cf3d)
+
 ### Registering a user
 
 To register a new user, send a POST request to the `/auth/register` endpoint with the following JSON payload:
