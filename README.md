@@ -140,6 +140,165 @@ You can run the tests with Docker Compose using the command:
 docker-compose up --abort-on-container-exit --exit-code-from test test
 ```
 
+## Design Decision
+
+### Context and scope
+
+This project is a Transaction API built using FastAPI and PostgreSQL,
+with Redis for caching. The API provides functionality for user authentication,
+transaction management, and analytics.
+The system is designed to handle user registration, login, and
+secure access to transaction-related operations.
+The API is containerized using Docker for easy deployment and scalability.
+
+
+### Goals and non-goals
+
+#### Goals:
+
+1. Provide secure user authentication using JWT tokens
+
+2. Allow CRUD operations for transactions
+
+3. Offer user analytics based on transaction data
+
+3. Implement caching for improved performance
+
+4. Ensure data encryption for sensitive information
+
+5. Support containerized deployment
+
+#### Non-goals:
+
+1. Implement real-time transaction processing
+
+2. Provide multi-factor authentication
+
+3. Support multiple database backends
+
+4. Implement a front-end interface
+
+
+## Design
+
+#### System-context-diagram
+
+![Sequence diagram](images/sequence.svg)
+
+
+## APIs
+
+The API exposes the following main endpoints:
+
+### Authentication:
+
+`POST /auth/register`: Register a new user
+
+`POST /auth/login`: Log in a user and receive a JWT token
+
+### Transactions:
+
+`POST /transactions`: Create a new transaction
+
+`PUT /transactions/{transaction_id}`: Update an existing transaction
+
+`DELETE /transactions/{transaction_id}`: Delete a transaction
+
+### Analytics:
+
+`GET /analytics`: Retrieve user analytics data
+
+
+## Data storage
+
+### PostgreSQL:
+
+`Users table`: Stores user information (id, username, email, hashed_password)
+
+`Transactions table`: Stores transaction data (id, user_id, full_name, transaction_date, transaction_amount, transaction_type)
+
+### Redis:
+
+used for caching analytics data with a key format of "analytics:{user_id}"
+
+
+## Code and pseudo-code
+
+The main components of the system are:
+
+1. `AuthService`: Handles user registration and login
+
+2. `TokenService`: Manages JWT token creation and verification
+
+3. `TransactionService`: Manages CRUD operations for transactions
+
+4. `AnalyticsService`: Processes and caches user analytics data
+
+5. `AuthenticateUserMiddleware`: Ensures secure access to protected endpoints
+
+### Key implementation details:
+
+1. Password hashing is used for secure storage of user passwords
+
+2. JWT tokens are used for authentication, with configurable expiration times
+
+3. Redis is used to cache analytics data for improved performance
+
+4. Database queries are performed asynchronously using the databases library
+
+5. Error handling and logging are implemented throughout the application
+
+
+### Degree of constraint
+
+This project has a moderate degree of constraint. The solution space is defined by the chosen technologies (FastAPI, PostgreSQL, Redis) and the requirements for secure authentication and transaction management. However, there is flexibility in how these components are integrated and how specific features are implemented.
+
+
+### Alternatives considered
+
+Using SQLAlchemy ORM instead of raw SQL queries:
+
+    Pro: More Pythonic approach to database operations
+
+    Con: Potential performance overhead for simple queries
+
+    Decision: Stick with raw SQL for better performance and control
+
+Implementing WebSocket for real-time updates:
+
+    Pro: Would allow for real-time transaction notifications
+
+    Con: Increases complexity and may not be necessary for the current use case
+
+    Decision: Not implemented to keep the API focused on core functionality
+
+Using a NoSQL database like MongoDB:
+
+    Pro: More flexible schema for evolving data structures
+
+    Con: Less suitable for structured financial data and complex queries
+
+    Decision: Stick with PostgreSQL for ACID compliance and robust querying capabilities
+
+Implementing rate limiting:
+
+    Pro: Would protect against potential abuse of the API
+
+    Con: Adds complexity and may not be necessary for a small-scale application
+
+    Decision: Consider implementing in the future if needed
+
+Using OAuth2 for authentication:
+
+    Pro: Allows for third-party authentication providers
+
+    Con: More complex to implement and may be overkill for the current requirements
+
+    Decision: Stick with custom JWT implementation for simplicity and control
+
+The chosen design provides a good balance between functionality, security, and performance, while leaving room for future enhancements as needed.
+
+
 ## Contributing
 
 Contributions are welcome! If you find any issues or have suggestions for improvements, please open an issue or submit a pull request on the GitHub repository.
