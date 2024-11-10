@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import Mock, patch, AsyncMock
+from unittest.mock import Mock, patch
 from uuid import UUID
 from fastapi import HTTPException
 from databases import Database
