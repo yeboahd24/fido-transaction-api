@@ -162,4 +162,3 @@ class TestAuthService:
 
         assert exc_info.value.status_code == 400
         assert exc_info.value.detail == "User with this username already exists"
-
