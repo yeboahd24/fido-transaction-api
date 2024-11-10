@@ -119,6 +119,8 @@ To get user analytics, send a GET request to the `/analytics` endpoint.
 
 The response will contain the user's analytics data, including the full name, total transactions, total credit, total debit, average transaction value, and the busiest day.
 
+NB: The analytics data is cached in Redis for improved performance
+Also analytics can be filtered by date, `GET /analytics/?transaction_date=2024-11-10`
 
 ## Docker
 
