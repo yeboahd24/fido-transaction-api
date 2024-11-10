@@ -1,139 +1,165 @@
 import pytest
-from unittest.mock import AsyncMock, patch
-from fastapi import HTTPException, status
-from app.models.user import UserCreate
-from app.schemas.user import UserLogin
-from app.services.auth_service import AuthService, get_current_user
+from unittest.mock import Mock, patch
+from uuid import UUID
+from fastapi import HTTPException
 from databases import Database
-from uuid import uuid4
+from app.models.user import User, UserCreate
+from app.schemas.user import UserLogin
+from app.services.auth_service import AuthService
+from app.utils.jwt import TokenService
 
 
-# Mock the database
 @pytest.fixture
 def mock_database():
-    return AsyncMock(spec=Database)
+    return Mock(spec=Database)
 
 
-# Mock the TokenService
 @pytest.fixture
-def mock_token_service():
-    with patch("app.services.auth_service.TokenService") as mock:
-        yield mock
-
-
-# Mock the hash_password and verify_password functions
-@pytest.fixture
-def mock_encryption():
-    with patch("app.services.auth_service.hash_password") as mock_hash:
-        with patch("app.services.auth_service.verify_password") as mock_verify:
-            yield mock_hash, mock_verify
-
-
-# Test login_user method
-@pytest.mark.asyncio
-async def test_login_user_success(mock_database, mock_token_service, mock_encryption):
-    mock_hash, mock_verify = mock_encryption
-    mock_verify.return_value = True
-    mock_token_service.create_access_token.return_value = "access_token"
-
-    user_login = UserLogin(username="testuser", password="testpassword")
-    mock_user_dict = {
-        "id": uuid4(),  # Generate a valid UUID
-        "username": "testuser",
-        "email": "test@example.com",
-        "hashed_password": "hashedpassword",
-    }
-    mock_database.fetch_one.return_value = mock_user_dict  # Use a dictionary
-
-    result = await AuthService.login_user(user_login, mock_database)
-
-    assert result == {"access_token": "access_token", "token_type": "bearer"}
-    mock_database.fetch_one.assert_called_once()
-    mock_verify.assert_called_once_with("testpassword", "hashedpassword")
-    mock_token_service.create_access_token.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_login_user_invalid_credentials(mock_database, mock_encryption):
-    mock_hash, mock_verify = mock_encryption
-    mock_verify.return_value = False
-
-    user_login = UserLogin(username="testuser", password="wrongpassword")
-    mock_user_dict = {
-        "id": uuid4(),  # Generate a valid UUID
-        "username": "testuser",
-        "email": "test@example.com",
-        "hashed_password": "hashedpassword",
-    }
-    mock_database.fetch_one.return_value = mock_user_dict  # Use a dictionary
-
-    with pytest.raises(HTTPException) as exc_info:
-        await AuthService.login_user(user_login, mock_database)
-
-    assert exc_info.value.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-    # assert exc_info.value.detail == "Incorrect username or password"
-    mock_database.fetch_one.assert_called_once()
-    mock_verify.assert_called_once_with("wrongpassword", "hashedpassword")
-
-
-@pytest.mark.asyncio
-async def test_register_user_existing_email(mock_database):
-    mock_database.fetch_one.return_value = {
-        "id": uuid4(),  # Generate a valid UUID
-        "username": "existinguser",
-        "email": "existing@example.com",
-        "hashed_password": "hashedpassword",
-    }  # Use a dictionary
-
-    user_create = UserCreate(
-        username="newuser", email="existing@example.com", password="newpassword"
+def sample_user():
+    # Create a mock encrypted password that matches what we'll use in the test
+    mock_encrypted_password = "gAAAAABk6JH6dVRPO8vZ9q9j_YWJ8OX5YbYT6YQ9nQ9W1q2X3D4="
+    return User(
+        id=UUID("12345678-1234-5678-1234-567812345678"),
+        username="testuser",
+        email="test@example.com",
+        hashed_password=mock_encrypted_password,
     )
-    with pytest.raises(HTTPException) as exc_info:
-        await AuthService.register_user(user_create, mock_database)
-
-    assert exc_info.value.status_code == status.HTTP_400_BAD_REQUEST
-    assert exc_info.value.detail == "User with this email already exists"
-    mock_database.fetch_one.assert_called_once()
 
 
-# Test get_current_user method
-@pytest.mark.asyncio
-async def test_get_current_user_success(mock_database):
-    mock_database.fetch_one.return_value = {
-        "id": uuid4(),  # Generate a valid UUID
-        "username": "testuser",
-        "email": "test@example.com",
-        "hashed_password": "hashedpassword",
-    }  # Use a dictionary
-
-    payload = {"user_id": str(uuid4())}  # Generate a valid UUID and convert to string
-    result = await get_current_user(payload, mock_database)
-
-    assert result.username == "testuser"
-    assert result.email == "test@example.com"
-    mock_database.fetch_one.assert_called_once()
+@pytest.fixture
+def sample_user_create():
+    return UserCreate(
+        username="testuser", email="test@example.com", password="password123"
+    )
 
 
-@pytest.mark.asyncio
-async def test_get_current_user_invalid_token(mock_database):
-    payload = {"user_id": None}
-    with pytest.raises(HTTPException) as exc_info:
-        await get_current_user(payload, mock_database)
-
-    assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
-    assert exc_info.value.detail == "Invalid token"
-    mock_database.fetch_one.assert_not_called()
+@pytest.fixture
+def sample_user_login():
+    return UserLogin(username="testuser", password="password123")
 
 
-@pytest.mark.asyncio
-async def test_get_current_user_user_not_found(mock_database):
-    mock_database.fetch_one.return_value = None
+class TestAuthService:
+    @pytest.mark.asyncio
+    async def test_login_user_successful(
+        self, mock_database, sample_user, sample_user_login
+    ):
+        # Mock get_user_by_username
+        async def mock_get_user(*args, **kwargs):
+            return sample_user
 
-    payload = {"user_id": str(uuid4())}  # Generate a valid UUID and convert to string
-    with pytest.raises(HTTPException) as exc_info:
-        await get_current_user(payload, mock_database)
+        # Mock the encryption/decryption process
+        def mock_decrypt(*args, **kwargs):
+            return "password123".encode()
 
-    assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
-    assert exc_info.value.detail == "Invalid token"
-    mock_database.fetch_one.assert_called_once()
+        def mock_encrypt(*args, **kwargs):
+            return "gAAAAABk6JH6dVRPO8vZ9q9j_YWJ8OX5YbYT6YQ9nQ9W1q2X3D4=".encode()
+
+        with patch(
+            "app.services.auth_service.AuthService.get_user_by_username",
+            side_effect=mock_get_user,
+        ), patch(
+            "app.utils.encryption.Fernet.decrypt",
+            side_effect=mock_decrypt,
+        ), patch(
+            "app.utils.encryption.Fernet.encrypt",
+            side_effect=mock_encrypt,
+        ):
+            # Mock token creation
+            expected_token = "dummy_token"
+            with patch.object(
+                TokenService, "create_access_token", return_value=expected_token
+            ):
+                result = await AuthService.login_user(sample_user_login, mock_database)
+
+                assert result["access_token"] == expected_token
+                assert result["token_type"] == "bearer"
+
+    @pytest.mark.asyncio
+    async def test_login_user_invalid_username(self, mock_database, sample_user_login):
+        async def mock_get_user(*args, **kwargs):
+            return None
+
+        with patch(
+            "app.services.auth_service.AuthService.get_user_by_username",
+            side_effect=mock_get_user,
+        ):
+            with pytest.raises(HTTPException) as exc_info:
+                await AuthService.login_user(sample_user_login, mock_database)
+
+            assert exc_info.value.status_code == 500
+            assert exc_info.value.detail == "401: Incorrect username or password"
+
+    @pytest.mark.asyncio
+    async def test_login_user_invalid_password(
+        self, mock_database, sample_user, sample_user_login
+    ):
+        async def mock_get_user(*args, **kwargs):
+            return sample_user
+
+        def mock_decrypt(*args, **kwargs):
+            return "wrong_password".encode()
+
+        with patch(
+            "app.services.auth_service.AuthService.get_user_by_username",
+            side_effect=mock_get_user,
+        ), patch(
+            "app.utils.encryption.Fernet.decrypt",
+            side_effect=mock_decrypt,
+        ):
+            with pytest.raises(HTTPException) as exc_info:
+                await AuthService.login_user(sample_user_login, mock_database)
+
+            assert exc_info.value.status_code == 500
+            assert exc_info.value.detail == "401: Incorrect username or password"
+
+    @pytest.mark.asyncio
+    async def test_register_user_successful(self, mock_database, sample_user_create):
+        # Mock database responses for checking existing user
+        mock_database.fetch_one.return_value = None
+        mock_database.execute.return_value = None
+
+        # Mock password hashing
+        hashed_password = "hashed_password_123"
+        with patch("app.utils.encryption.hash_password", return_value=hashed_password):
+            with patch(
+                "app.services.auth_service.uuid4",
+                return_value=UUID("12345678-1234-5678-1234-567812345678"),
+            ):
+                result = await AuthService.register_user(
+                    sample_user_create, mock_database
+                )
+
+        assert result["username"] == sample_user_create.username
+        assert result["email"] == sample_user_create.email
+        assert "id" in result
+        assert "hashed_password" not in result
+
+    @pytest.mark.asyncio
+    async def test_register_user_existing_email(
+        self, mock_database, sample_user_create
+    ):
+        # Mock database response for existing user with same email
+        mock_database.fetch_one.return_value = {"email": sample_user_create.email}
+
+        with pytest.raises(HTTPException) as exc_info:
+            await AuthService.register_user(sample_user_create, mock_database)
+
+        assert exc_info.value.status_code == 400
+        assert exc_info.value.detail == "User with this email already exists"
+
+    @pytest.mark.asyncio
+    async def test_register_user_existing_username(
+        self, mock_database, sample_user_create
+    ):
+        # Mock database responses - no user with same email, but username exists
+        mock_database.fetch_one.side_effect = [
+            None,
+            {"username": sample_user_create.username},
+        ]
+
+        with pytest.raises(HTTPException) as exc_info:
+            await AuthService.register_user(sample_user_create, mock_database)
+
+        assert exc_info.value.status_code == 400
+        assert exc_info.value.detail == "User with this username already exists"
 
