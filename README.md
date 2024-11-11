@@ -3,7 +3,17 @@
 This is a simple API for managing transactions in a database. It uses FastAPI and PostgreSQL as the database and Redis as the cache. 
 
 
-NB: All requests are authenticated using JWT tokens. The API is secured by default
+NB: All requests are authenticated using JWT tokens. The API is secured by default. You must register and login to get your token for the subsequence requests.
+
+Whenever you get a 401 error, you must login again to get a new token.
+
+```json
+{
+    "detail": "Could not validate credentials"
+}
+```
+```
+```
 
 ## Prerequisites
 
